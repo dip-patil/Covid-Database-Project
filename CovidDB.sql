@@ -133,3 +133,269 @@ FROM StatewiseSummary
 ORDER BY Total_Negative ASC;
 
 
+-- **Joins:**
+-- 1. Which country has the highest number of confirmed cases on a specific date?
+
+SELECT TOP 1 s.State,s.Positive
+FROM covid_19_india c
+JOIN StatewiseTestingDetails s 
+ON c.Date = s.Date
+where s.Date='2020-04-24'
+order BY s.Positive DESC;
+
+
+
+ -- 2. Show the total number of deaths in each country, including provinces/states, for a given date.
+ 
+ Select c.State_UnionTerritory,Sum(c.Deaths)
+ from covid_19_india c
+ join StatewiseTestingDetails s
+ on c.Date=s.Date
+ where c.Date='2020-04-17'
+ Group by c.State_UnionTerritory
+
+
+
+
+ --3. List the continents along with the total number of confirmed cases, deaths, and recoveries.
+
+ Select c.State_UnionTerritory,
+    CAST(SUM(CAST(ISNULL(s.Positive, 0) AS BIGINT)) AS BIGINT) AS Total_Confirmed_Cases,
+    CAST(SUM(CAST(ISNULL(c.Deaths, 0) AS BIGINT)) AS BIGINT) AS Total_Deaths,
+    CAST(SUM(CAST(ISNULL(s.TotalSamples, 0) AS BIGINT) - CAST(ISNULL(s.Positive, 0) AS BIGINT)) AS BIGINT) AS Total_Recoveries
+ from covid_19_india c
+ join StatewiseTestingDetails s
+ on c.State_UnionTerritory=s.State
+ Group by c.State_UnionTerritory
+ 
+
+
+ --**Aggregate Functions:**
+-- 4. Calculate the average number of new deaths per day across all countries.
+
+Select (Sum(Deaths)/COUNT(Date)) as [Avgerage New Deaths]
+From covid_19_india
+
+
+ --5. Find the maximum number of active cases recorded in any country on a specific date.
+
+ Select top 1 State_UnionTerritory,(Sum(Confirmed)-Sum(Deaths)-Sum(Cured)) as [Active Cases]
+ from covid_19_india
+ Where Date='2020-04-17'
+ group by State_UnionTerritory
+ Order by [Active Cases] DESC
+
+ --**Stored Procedure:**
+ --6. Create a stored procedure that returns the total number of recovered cases for a given country and date.
+
+Create Proc TotRecoveredCases
+@country nvarchar(50),
+@date nvarchar(50),
+@total int out
+As
+Begin
+	Select @total= Sum(Cured) from  covid_19_india where Date=@date and State_UnionTerritory=@country;
+end
+
+Declare @total int
+Exec TotRecoveredCases 'Kerala', '2020-03-03', @total out
+Print @total
+
+
+ --7. Design a stored procedure to update the number of deaths for a specific country and date.
+
+ Create Proc UpdateDeathsByCountryAndDate
+ @Deaths int,
+@country nvarchar(50),
+@date nvarchar(50)
+As
+Begin
+	Update covid_19_india set Deaths=@Deaths where Date=@date and State_UnionTerritory=@country;
+end
+
+Exec UpdateDeathsByCountryAndDate 1,'Kerala', '2020-01-30'
+
+
+ --**Views:**
+-- 8. Create a view that displays the total number of cases (confirmed, deaths, and recovered) for each country on a specific date.
+ 
+ Create View DisplayTotalConfirmedRecovered
+ As
+ Select c.Date,c.State_UnionTerritory,
+    Confirmed,c.Deaths,
+	c.Cured
+ from covid_19_india c
+ 
+ Select * from DisplayTotalConfirmedRecovered where Date='2020-01-30' and State_UnionTerritory='Kerala'
+
+
+ -- 9. Implement a view to show the latest data (confirmed, deaths, recovered) for each country.
+
+CREATE VIEW LatestCovidData 
+AS
+SELECT State_UnionTerritory,Max(Date) as LatestDate
+FROM covid_19_india
+GROUP BY State_UnionTerritory
+
+SELECT c.State_UnionTerritory,c.Confirmed,c.Deaths,c.Cured,l.LatestDate
+FROM covid_19_india c
+JOIN LatestCovidData l
+ON c.State_UnionTerritory = l.State_UnionTerritory AND c.Date = l.LatestDate;
+ 
+
+ -- **T-SQL:**
+ --10. Write a T-SQL query to calculate the total number of cases (confirmed + deaths + recovered) for each country.
+  
+  Create or Alter Proc TotalCases
+  @total bigint out
+  As
+  begin
+  Set @total=0
+ 
+	Select @total =( Cast(Cured as int) + Cast(Deaths as int) + Cast(Confirmed as int))
+	from covid_19_india
+	group by State_UnionTerritory
+  end
+
+
+
+  Declare @total bigint
+  Exec TotalCases @total out
+  Print @total
+
+  
+ 
+ 
+ --11. Use T-SQL to identify the country with the highest number of new cases reported on a specific date.
+
+ 
+	CREATE VIEW HighestNewCasesByDate
+	AS
+	SELECT State_UnionTerritory,Sum(Confirmed) as [Highest New Cases],Date
+	FROM covid_19_india
+	GROUP BY State_UnionTerritory,Date
+	
+
+SELECT top 1 h.State_UnionTerritory,h.[Highest New Cases],h.Date
+FROM HighestNewCasesByDate h
+where h.Date='2020-03-30'
+Order by h.[Highest New Cases] DESC
+
+
+
+
+ --**CTE (Common Table Expressions):**
+ --12. Create a CTE to calculate the percentage increase in confirmed cases for each country over the past week.
+ 
+WITH WeeklyData AS (
+    SELECT c.State_UnionTerritory AS Country,
+		Sum(c.Confirmed) AS CurrentConfirmed,
+        Sum(p.Confirmed) AS LastWeekConfirmed
+    FROM covid_19_india c
+    JOIN covid_19_india p
+    ON c.State_UnionTerritory = p.State_UnionTerritory
+        AND DATEADD(DAY, -7, c.Date) = p.Date
+    Group By c.State_UnionTerritory
+)
+SELECT 
+    Country,
+    CAST((CurrentConfirmed - LastWeekConfirmed) * 100.0 / LastWeekConfirmed AS DECIMAL(10, 2)) as PercentageIncrease
+FROM WeeklyData
+WHERE LastWeekConfirmed IS NOT NULL and LastWeekConfirmed <> 0
+
+ 
+ 
+ -- 13. Use a CTE to find the country with the highest number of active cases at the moment.
+ With ActiveCases AS(
+ Select State_UnionTerritory,(Sum(Confirmed)-Sum(Deaths)-Sum(Cured)) as [Active Cases]
+ from covid_19_india
+ group by State_UnionTerritory
+ 
+ )
+ Select Top 1 * from ActiveCases Order by [Active Cases] DESC 
+ 
+ 
+ --**Indexes:**
+ --14. Explain the importance of indexes in optimizing queries for this dataset.
+ --15. Implement an index on the "Country/Region" column to speed up search operations.
+ 
+CREATE INDEX idx_StateUnionTerritory 
+ON covid_19_india (State_UnionTerritory);
+
+ --**User-Defined Functions (UDF):**
+ --16. Develop a UDF to calculate the mortality rate (deaths / confirmed cases * 100) for a given country.
+
+CREATE FUNCTION CalculateMortalityRate( @Country NVARCHAR(50))
+RETURNS FLOAT
+AS
+BEGIN
+    DECLARE @MortalityRate FLOAT;
+	SELECT @MortalityRate = CASE WHEN SUM(Confirmed) = 0 THEN 0
+                            ELSE CAST(SUM(Deaths) AS FLOAT) * 100 / SUM(Confirmed)
+                           END
+    FROM covid_19_india
+    WHERE State_UnionTerritory = @Country;
+
+    RETURN @MortalityRate;
+END;
+
+SELECT dbo.CalculateMortalityRate('Kerala') AS MortalityRate;
+
+
+ --17. Create a UDF to determine the recovery rate (recovered / confirmed cases * 100) for a specific date
+
+CREATE FUNCTION CalculateRecoveryRate( @Date DATE)
+RETURNS FLOAT
+AS
+BEGIN
+    DECLARE @RecoveryRate FLOAT;
+    SELECT @RecoveryRate = CASE WHEN SUM(Confirmed) = 0 THEN 0
+                        ELSE CAST(SUM(Cured) AS FLOAT) * 100 / SUM(Confirmed)
+                        END
+    FROM covid_19_india
+    WHERE Date = @Date;
+
+    RETURN @RecoveryRate;
+END;
+
+SELECT dbo.CalculateRecoveryRate('2020-03-03') AS RecoveryRate;
+
+
+ --**Group By:**
+--18. Group the data by continent and calculate the total number of confirmed cases for each continent.
+
+SELECT State_UnionTerritory,SUM(Confirmed) AS TotalConfirmedCases
+FROM covid_19_india
+GROUP BY State_UnionTerritory
+ORDER BY TotalConfirmedCases DESC;
+
+
+-- 19. Group the data by date and compute the total number of deaths and recoveries for each date.
+
+SELECT Date,SUM(Deaths) AS TotalDeaths,
+    SUM(Cured) AS TotalRecoveries
+FROM covid_19_india
+GROUP BY Date
+ORDER BY Date;
+
+ --20. Group the data by country and calculate the average number of new cases reported daily for each country.
+ 
+ WITH DailyNewCases AS (
+    SELECT c.State_UnionTerritory AS Country,
+        c.Date AS CurrentDate,
+        ISNULL(c.Confirmed - p.Confirmed, 0) AS NewCases
+    FROM covid_19_india c
+    JOIN covid_19_india p
+    ON c.State_UnionTerritory = p.State_UnionTerritory
+        AND DATEADD(DAY, -1, c.Date) = p.Date
+)
+SELECT Country,AVG(NewCases) AS AverageDailyNewCases
+FROM DailyNewCases
+GROUP BY Country
+ORDER BY AverageDailyNewCases DESC;
+
+
+
+Select * from covid_19_india;
+Select * from covid_vaccine_statewise;
+Select * from StatewiseTestingDetails;
