@@ -396,6 +396,180 @@ ORDER BY AverageDailyNewCases DESC;
 
 
 
+-------------------------------------------
+
+-- 1. Death Percentage 
+SELECT State_UnionTerritory,
+    (SUM(Deaths) * 100.0) / SUM(Confirmed) AS LocalDeathPercentage
+FROM covid_19_india
+GROUP BY State_UnionTerritory
+ORDER BY LocalDeathPercentage DESC;
+
+--2. Infected Population Percentage :
+
+SELECT State,
+    (SUM(Positive) * 100.0) / Sum(TotalSamples) AS LocalInfectedPercentage
+FROM dbo.StatewiseTestingDetails
+GROUP BY State
+ORDER BY LocalInfectedPercentage DESC;
+
+-- 3. Countries with the Highest Infection Rates:
+
+
+SELECT Top 1 State,
+    (SUM(Positive) * 100.0) / Sum(TotalSamples) AS InfectionRate
+FROM StatewiseTestingDetails
+GROUP BY State, TotalSamples
+ORDER BY InfectionRate DESC
+
+
+--4. Countries with the Highest Death Counts:
+
+SELECT State_UnionTerritory,
+    SUM(Deaths) AS TotalDeaths
+FROM covid_19_india
+GROUP BY State_UnionTerritory
+ORDER BY TotalDeaths DESC
+
+
+--5. Average Number of Deaths by Day:
+
+SELECT Date,State_UnionTerritory,
+    AVG(Deaths) AS AvgDeathsPerDay
+FROM covid_19_india
+GROUP BY Date, State_UnionTerritory
+ORDER BY State_UnionTerritory, Date;
+
+
+
+--6. Average Cases per Population (Top 10):
+
+SELECT Top 10 State,
+    Avg(Positive) as [Average Cases],
+	Sum(TotalSamples) AS Population
+FROM StatewiseTestingDetails
+GROUP BY State
+ORDER BY Population DESC
+
+
+--7. Countries with the Highest Rate of Infection (in Relation to Population):
+
+SELECT c.State_UnionTerritory AS Country,
+     CAST(SUM(CAST(c.Confirmed AS BIGINT)) * 100.0 / SUM(CAST(p.TotalSamples AS BIGINT)) AS DECIMAL(18, 2)) AS InfectionRate
+FROM covid_19_india c
+JOIN StatewiseTestingDetails p ON c.State_UnionTerritory = p.State
+GROUP BY c.State_UnionTerritory, p.TotalSamples
+ORDER BY InfectionRate DESC;
+
+--8. Countries with the Highest Number of Deaths:
+
+SELECT State_UnionTerritory,SUM(Deaths) AS TotalDeaths
+FROM covid_19_india
+GROUP BY State_UnionTerritory
+ORDER BY TotalDeaths DESC
+
+ --Queries on Vaccination:
+ --1)Total vaccinated with at least 1 dose over time
+
+ SELECT Updated_On AS Date,
+    SUM(First_Dose_Administered) AS TotalFirstDoseVaccinated
+FROM covid_vaccine_statewise
+GROUP BY Updated_On
+ORDER BY Date;
+
+
+
+--2)Percentage of the population vaccinated with at least the first dose until 30/9/2021 (Top 3)
+
+SELECT TOP 3 v.State,
+    SUM(v.First_Dose_Administered) * 100.0 / Sum(p.TotalSamples) AS VaccinationPercentage
+FROM covid_vaccine_statewise v
+JOIN StatewiseTestingDetails p ON v.State = p.State
+WHERE Updated_On <= '2021-09-30'
+GROUP BY v.State, p.TotalSamples
+ORDER BY VaccinationPercentage DESC;
+
+
+
+-- Using JOINS to combine the covid_deaths and covid_vaccine tables :
+ -- 1) To find out the population vs the number of people vaccinated
+
+ SELECT d.State,Sum(d.TotalSamples) as Population,
+	SUM(v.Second_Dose_Administered) AS TotalVaccinated
+FROM StatewiseTestingDetails d
+JOIN covid_vaccine_statewise v ON d.State = v.State
+GROUP BY d.State
+ORDER BY TotalVaccinated DESC;
+
+--2) To find out the percentage of different vaccine taken by people in a country
+
+SELECT v.State,
+    SUM(v.Covaxin_Doses_Administered) * 100.0 / SUM(v.Total_Doses_Administered) AS CovaxinPercentage,
+	SUM(v.CoviShield_Doses_Administered) * 100.0 / SUM(v.Total_Doses_Administered) AS CoviShieldPercentage,
+	SUM(v.Sputnik_V_Doses_Administered) * 100.0 / SUM(v.Total_Doses_Administered) AS SputnicVPercentage
+FROM 
+    covid_vaccine_statewise v
+GROUP BY 
+    v.State;
+
+
+
+-- 3) To find out percentage of people who took both the doses
+SELECT d.State,SUM(d.Second_Dose_Administered) * 100.0 / Sum(s.TotalSamples) AS FullyVaccinatedPercentage
+FROM covid_vaccine_statewise d
+join StatewiseTestingDetails s on d.State=s.State
+GROUP BY d.State
+ORDER BY FullyVaccinatedPercentage DESC;
+
+ -- Indian State Wise Analysis:
+-- 1. Total State-wise Confirmed Cases
+
+SELECT State_UnionTerritory AS State,
+    SUM(Confirmed) AS TotalConfirmedCases
+FROM covid_19_india
+GROUP BY State_UnionTerritory
+ORDER BY TotalConfirmedCases DESC;
+
+ -- 2. Maximum Active cases State-wise till date
+ SELECT State_UnionTerritory AS State,
+    MAX(Confirmed - Deaths - Cured) AS MaxActiveCases
+FROM covid_19_india
+GROUP BY State_UnionTerritory;
+
+ -- 3. Max Per Day Confirmed cases in States
+
+ SELECT State_UnionTerritory AS State,
+    MAX(Confirmed) AS MaxDailyConfirmedCases
+FROM covid_19_india
+GROUP BY State_UnionTerritory;
+
+ -- 4. Max Per Day Death cases in States
+ SELECT State_UnionTerritory AS State,
+    MAX(Deaths) AS MaxDailyDeaths
+FROM covid_19_india
+GROUP BY State_UnionTerritory;
+
+ -- 5. State-wise Mortality Rate
+ SELECT State_UnionTerritory AS State,
+    SUM(Deaths) * 100.0 / SUM(Confirmed) AS MortalityRate
+FROM covid_19_india
+GROUP BY State_UnionTerritory
+ORDER BY MortalityRate DESC;
+
+ --6. Covid Waves in ‘Mumbai'
+
+ SELECT FORMAT([Date], 'yyyy-MM') AS Month,
+	SUM(ISNULL(Positive, 0)) AS TotalPositiveCases,
+    SUM(ISNULL(Negative, 0)) AS TotalNegativeCases
+FROM StatewiseTestingDetails
+where State ='Maharashtra'
+GROUP BY FORMAT([Date], 'yyyy-MM')
+ORDER BY Month;
+
+
 Select * from covid_19_india;
 Select * from covid_vaccine_statewise;
 Select * from StatewiseTestingDetails;
+
+
+
